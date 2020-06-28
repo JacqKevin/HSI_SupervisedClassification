@@ -1,5 +1,5 @@
 function pred=predPLSDA(Scal, Sval, ref_cal, ref_val, group, model, para, fig)
-% Creaton of a model with PLS-DA algorithm. The model is calculate with a
+% Creation of a model with PLS-DA algorithm. The model is calculate with a
 % calibration set, after the validation set is predict. 
 % To verify the quality of the model, a confusion matrix and some
 % coefficients are define.
