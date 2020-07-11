@@ -1,12 +1,10 @@
-function [Cartlab,classworkk,ROIclasswork] = LabelledMapCreation(IM)
-% Function to create a labelled map for a discrimination.
-
+function [Cartlab,lbl] = LabelledMapCreation(IM)
+% Function to create a labelled map to estimate a discrimination model.
 % INPUT:
 %           IM : Hyperspectral datacube or RGB image of the sample
 % OUTPUT:
 %           Cartlab : Labelled map
-%           classworkk : Class of the labelled pixel 
-%           ROIclasswork : Spectra of the labelled pixel 
+%           Lbl : Label of the classes
 % This is the Matalb toolbox from the papers:
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -53,36 +51,19 @@ imagesc(RGB)
 while strcmp(roisearch,'Yes')
     hBox = imrect;
     roiPositioni = wait(hBox);
-    ROIid=reshape(RGB(roiPositioni(2):roiPositioni(2)+roiPositioni(4),roiPositioni(1):roiPositioni(1)+roiPositioni(3),:),[],size(RGB,3));
-    
-    Mid=reshape(ROI(roiPositioni(2):roiPositioni(2)+roiPositioni(4),roiPositioni(1):roiPositioni(1)+roiPositioni(3),:),[],size(ROI,3));
+    roiPositioni=round(roiPositioni);
     
     [indx,~] = listdlg('ListString',list);
     if isempty(find(class==indx))
         lab=inputdlg({strcat('Class name ',num2str(indx))},'Labelling');
         lbl{indx}=lab{1,1};
     end
-    class=[class; ones(size(ROIid,1),1)*indx];
     Cartlab(roiPositioni(2):roiPositioni(2)+roiPositioni(4),roiPositioni(1):roiPositioni(1)+roiPositioni(3))=indx;
-    nbclassi(indx)=length(find(class==indx));
-    ROIclass=[ROIclass; ROIid];
-    
-    Mclass=[Mclass;Mid];
+    nbclassi(indx)=sum(Cartlab(:)==indx);
+
     list{indx}=strcat(lbl{indx},' : ',num2str(nbclassi(indx)/nbpixel),'%');
     
     roisearch=questdlg('Do you want to continue ?','ROI sélection','Yes','No','Yes');
-end
-
-classi=unique(class);
-
-classwork=class;
-
-ROIclasswork=Mclass;
-indxclasswork=classi;
-
-classworkk=zeros(size(classwork,1),length(indxclasswork));
-for i=1:size(classwork,1)
-    classworkk(i,classwork(i,1))=1;
 end
 
 end
