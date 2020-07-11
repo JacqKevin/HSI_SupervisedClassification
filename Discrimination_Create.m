@@ -1,4 +1,4 @@
-function [Mdl,IM, IMlabel] =Discrimination_Create(M,RGB,d,wl,Cartlab,algo,fig)
+function [Mdl,IM, IMlabel] =Discrimination_Create(M,RGB,d,wl,Cartlab,algo,fig,opt)
 % Function to estimate classification models with DT, RF, ANN, 
 % CNN, LDA, QDA, PLS-DA approaches.
 %
@@ -19,6 +19,16 @@ function [Mdl,IM, IMlabel] =Discrimination_Create(M,RGB,d,wl,Cartlab,algo,fig)
 %		6: Quadratic discriminant analysis QDA
 %		7: Partial least squares discriminant analysis PLS-DA
 %       fig: Display figure with value different from 0
+%       opt: {water pseudoabs datapretreat datapretreat2 datapretreat2b}
+%               water: remove moisture band?: 'Yes','No'
+%               pseudoabs: conversion in pseudo-absorbance?: 'Yes','No'
+%               datapretreat: normalization: 'No','Center','Autoscaling'
+%               datapretreat2: spectral pre-processing?: 'Yes','No'
+%               if datapretreat2 = 'Yes': 
+%                      datapretreat2b: which preprocessing: 
+%                               1:detrend, 2:SNV, 3:SNVD, 4:MSC, 5:D1,
+%                               6:D2, 7:SNV+D1, 8:SNVD+D1, 9:MSC+D1, 
+%                               10:SNV+D2, 11:SNVD+D2, 12:MSC+D2, 13:CR
 % OUTPUT:
 %       Mdl: Discrimination models
 %       IM: Predicted classification maps
@@ -40,11 +50,11 @@ Mdlvs.Method='Classification';
 Mdl.Type='Complete';
 Mdlvs.Type='Reduce';
 
-if nargin<5
+if nargin<6
     algo=0;
     fig=0;
 end
-if nargin<6
+if nargin<7
     fig=0;
 end
 if sum(algo==0)==1
@@ -54,6 +64,15 @@ else if sum(algo==3)>=1
     else
         numalgo=length(algo);
     end
+end
+if nargin==8
+  water=opt{1};
+  pseudoabs=opt{2}; 
+  datapretreat=opt{3};
+  datapretreat2=opt{4};
+  if strcmp(datapretreat2,'Yes')
+      datapretreat2b=opt{5};
+  end
 end
 
 m=median(M(:));
@@ -71,7 +90,9 @@ end
 
 % Moisture band with NIR data
 if mean(wl)>1000
+    if nargin<8
     water = questdlg('Do you want to remove moisture bands ?','Moisture','Yes','No','No');
+    end
     if strcmp(water,'Yes')
         z1=[1094 1176];
         z2=[1339 1466];
@@ -98,8 +119,10 @@ if iscell(Cartlab)
 end
 
 % Conversion and normalization
+if nargin<8
 pseudoabs = questdlg('Do you want to convert your data in pseudo-absorbance ?','Pseudo-Absorbance','Yes','No','No');
 datapretreat = questdlg('Do you want to center or normalized your data?','Preprocessing','No','Center','Autoscaling','No');
+end
 
 if strcmp(pseudoabs,'Yes')
     Mdl.Spectral='Absorbance';
@@ -121,10 +144,14 @@ if strcmp(pseudoabs,'Yes')
 end
 
 %% Spectral preprocessing
+if nargin<8
 datapretreat2 = questdlg('Do you want to preprocess the spectra ?','Preprocess','Yes','No','No');
+end
 if strcmp(datapretreat2,'Yes')
     pret={'Detrend','SNV','SNVD','MSC','D1','D2','SNV+D1','SNVD+D1','MSC+D1','SNV+D2','SNVD+D2','MSC+D2','CR'};
+    if nargin<8
     datapretreat2b = listdlg('ListString',pret);
+    end
     M = reshape(AllPret(reshape(M,[],size(M,3)),wl,datapretreat2b),size(M,1),size(M,2),size(M,3));
     Mdl.SpectralProcessing=pret{datapretreat2b};
     Mdlvs.SpectralProcessing=pret{datapretreat2b};
@@ -189,6 +216,7 @@ if exist('Cartlab','var')% Labelled map
         al = rand(1,numc(i)); % random number
         [~,iii] = sort(al);
         [tp,~]=find(Ytp==C(i));
+        iM=1;
         if iM==1&&i==1
             Xtrain=Xtp(tp(iii(1:cal)),:);
             Xtest=Xtp(tp(iii(cal+1:end)),:);
@@ -682,8 +710,8 @@ if algo==0|sum(algo==4)==1
         reluLayer
         
         % Conv3
-        convolution2dLayer([3 3],35,...
-        'Stride',[1 1],'Padding',[1 1],...
+        convolution2dLayer([3 1],35,...
+        'Stride',[1 1],'Padding',[1 0],...
         'WeightLearnRateFactor',1,'WeightL2Factor',1,...
         'BiasLearnRateFactor',2,'BiasL2Factor',0)
         
@@ -728,7 +756,7 @@ if algo==0|sum(algo==4)==1
         
         % ConvPool8
         convolution2dLayer([1 1],poolnum*2,...
-        'Stride',[2 2],'Padding',[0 0],...
+        'Stride',[2 1],'Padding',[0 0],...
         'WeightLearnRateFactor',1,'WeightL2Factor',1,...
         'BiasLearnRateFactor',2,'BiasL2Factor',0)
         
@@ -991,48 +1019,49 @@ end
 close(h)
 
 % Display discriminant wavelength for each model
-figure;
-i=1;
+% figure;
+% i=1;
 % if sum(algo==1)>0||algo==0
 % plot(wl,model.DT.NodeProbability,'linewidth',2)
 % hold on
 % leg{i}='DT';
 % i=i+1;
 % end
-if sum(algo==3)>0||(length(algo)==1&&algo==0)
-    plot(wl,sum(cell2mat(Mdl.ANN{1,2}.IW))/max(abs(sum(cell2mat(Mdl.ANN{1,2}.IW)))),'linewidth',2)
-    hold on
-    leg{i}='ANN2';
-    i=i+1;
-end
-if sum(algo==5)>0||(length(algo)==1&&algo==0)
-    plot(wl,Mdl.LDA.Coeffs(1, 2).Linear/max(abs(Mdl.LDA.Coeffs(1, 2).Linear)),'linewidth',2)
-    hold on
-    leg{i}='LDA';
-    i=i+1;
-end
-if sum(algo==6)>0||(length(algo)==1&&algo==0)
-    plot(wl,Mdl.QDA.Coeffs(1, 2).Linear/max(abs(Mdl.QDA.Coeffs(1, 2).Linear)),'linewidth',2)
-    hold on
-    leg{i}='QDA';
-    i=i+1;
-end
-if sum(algo==7)>0||(length(algo)==1&&algo==0)
-    plot(wl,Mdl.SVM.Beta/max(abs(Mdl.SVM.Beta)),'linewidth',2)
-    hold on
-    leg{i}='SVM';
-    i=i+1;
-end
-if sum(algo==8)>0||(length(algo)==1&&algo==0)
-    plot(wl,Mdl.PLSDA.B(:,1)/max(abs(Mdl.PLSDA.B(:,1))),'linewidth',2)
-    leg{i}='PLS-DA';
-end
-grid on
-xlim([wl(1) wl(end)])
-legend(leg)
-xlabel('Wavelength (nm)')
-ylabel('Normalized coefficients')
-set(gca,'fontsize',14,'xtick',round(wl(1)/100)*100:100:round(wl(end)/100)*100)
+% 
+% if sum(algo==3)>0||(length(algo)==1&&algo==0)
+%     plot(wl,sum(cell2mat(Mdl.ANN{1,2}.IW))/max(abs(sum(cell2mat(Mdl.ANN{1,2}.IW)))),'linewidth',2)
+%     hold on
+%     leg{i}='ANN2';
+%     i=i+1;
+% end
+% if sum(algo==5)>0||(length(algo)==1&&algo==0)
+%     plot(wl,Mdl.LDA.Coeffs(1, 2).Linear/max(abs(Mdl.LDA.Coeffs(1, 2).Linear)),'linewidth',2)
+%     hold on
+%     leg{i}='LDA';
+%     i=i+1;
+% end
+% if sum(algo==6)>0||(length(algo)==1&&algo==0)
+%     plot(wl,Mdl.QDA.Coeffs(1, 2).Linear/max(abs(Mdl.QDA.Coeffs(1, 2).Linear)),'linewidth',2)
+%     hold on
+%     leg{i}='QDA';
+%     i=i+1;
+% end
+% if sum(algo==7)>0||(length(algo)==1&&algo==0)
+%     plot(wl,Mdl.SVM.Beta/max(abs(Mdl.SVM.Beta)),'linewidth',2)
+%     hold on
+%     leg{i}='SVM';
+%     i=i+1;
+% end
+% if sum(algo==8)>0||(length(algo)==1&&algo==0)
+%     plot(wl,Mdl.PLSDA.B(:,1)/max(abs(Mdl.PLSDA.B(:,1))),'linewidth',2)
+%     leg{i}='PLS-DA';
+% end
+% grid on
+% xlim([wl(1) wl(end)])
+% legend(leg)
+% xlabel('Wavelength (nm)')
+% ylabel('Normalized coefficients')
+% set(gca,'fontsize',14,'xtick',round(wl(1)/100)*100:100:round(wl(end)/100)*100)
 
 % Remove abberant pixels
 mask=AbberantPixels(M,RGB,d,wl);
@@ -1043,7 +1072,7 @@ if sum(algo==3)==1|algo==0
     [~,idx]=max(annres);
 end
 
-if fig==1
+if fig>1
     % Map
     figure
     if (length(algo)==1&&algo==0)
@@ -1095,12 +1124,28 @@ if fig==1
                     else
                         ha(1)=subplot(211);
                         net=Mdl.CNN;
-                        label=classify(net,reshape(permute(M,[3 1 2]),size(M,3),1,1,size(M,2)*size(M,1)));
-                        imagesc(reshape(label,size(M,1),size(M,2)).*mask);
+                        if size(M,1)>200
+                            t=floor(size(M,1)/200);
+                            Mred=M(1:t:end,1:t:end,:);
+                            maskred=mask(1:t:end,1:t:end,:);
+                            RGBred=RGB(1:t:end,1:t:end,:);
+                            dred=d(1:t:end);
+                        else
+                            Mred=M;
+                            maskred=mask;
+                            dred=d;
+                            RGBred=RGB;
+                        end
+                        label=classify(net,reshape(permute(Mred,[3 1 2]),size(Mred,3),1,1,size(Mred,2)*size(Mred,1)));
+                        imagesc(double(reshape(label,size(Mred,1),size(Mred,2))).*maskred);
                         title('Convolutional Neural Network')
                         ha(2)=subplot(212);
-                        imagesc(RGB);
+                        imagesc(RGBred);
                         title('RGB')
+                        
+                        IM(:,:,1)=double(reshape(label,size(Mred,1),size(Mred,2))).*maskred;
+                        IMlabel{1}='Convolutional Neural Network';
+                        lab{1}='CNN';
                     end
                 end
             end
@@ -1145,7 +1190,7 @@ if fig==1
                             imagesc(d,d(1:size(M,3)),reshape(label,size(M,1),size(M,2)).*mask);
                             title('Artificial Neural Network')
                             
-                            IM(:,:,it)=reshape(label,size(M,1),size(M,2)).*mask;
+                            IM(:,:,it)=double(reshape(label,size(M,1),size(M,2))).*mask;
                             for k=1:length(Y)
                                 Ys(k)=nanmedian(nanmedian(squeeze(IM(:,disc(1,k):disc(2,k),it))));
                             end
@@ -1206,11 +1251,21 @@ if fig==1
                         else if algo(j)==4
                                 ha(it)=subplot(length(algo)+1,1,it);
                                 net=Mdl.CNN;
-                                label=classify(net,reshape(permute(M,[3 1 2]),size(M,3),1,1,size(M,2)*size(M,1)));
-                                imagesc(d,d(1:size(M,3)),reshape(label,size(M,1),size(M,2)).*mask);
+                                if size(M,1)>200
+                                    t=floor(size(M,1)/200);
+                                    Mred=M(1:t:end,1:t:end,:);
+                                    maskred=mask(1:t:end,1:t:end,:);
+                                    dred=d(1:t:end);
+                                else
+                                    Mred=M;
+                                    maskred=mask;
+                                    dred=d;
+                                end
+                                label=classify(net,reshape(permute(Mred,[3 1 2]),size(Mred,3),1,1,size(Mred,2)*size(Mred,1)));
+                                imagesc(dred,dred(1:size(Mred,1)),double(reshape(label,size(Mred,1),size(Mred,2))).*maskred);
                                 title('Convolutional Neural Network')
                                 
-                                IM(:,:,it)=reshape(label,size(M,1),size(M,2)).*mask;
+                                IM(:,:,it)=double(reshape(label,size(Mred,1),size(Mred,2))).*maskred;
                                 for k=1:length(Y)
                                     Ys(k)=nanmedian(nanmedian(squeeze(IM(:,disc(1,k):disc(2,k),it))));
                                 end
